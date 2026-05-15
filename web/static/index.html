@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TripGraph — AI Travel Planner</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Lucide icons (UMD) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════ HERO ══ -->
+<section id="hero">
+  <div class="hero-orb hero-orb-1"></div>
+  <div class="hero-orb hero-orb-2"></div>
+  <div class="hero-orb hero-orb-3"></div>
+
+  <nav class="hero-nav">
+    <div class="nav-brand">
+      <span class="nav-icon">🗺️</span>
+      <span class="nav-title">TripGraph</span>
+    </div>
+    <div class="nav-links">
+      <a href="#planner">Plan a Trip</a>
+      <a href="http://localhost:8501" target="_blank" class="nav-pill">Open Streamlit ↗</a>
+    </div>
+  </nav>
+
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Powered by Neo4j · Groq · PySpark
+    </div>
+    <h1>
+      Plan smarter.<br />
+      <span class="gradient-text">Travel better.</span>
+    </h1>
+    <p class="hero-tagline">
+      AI-powered itineraries built from 6M+ Yelp reviews using graph intelligence,
+      TF-IDF matching, and personalised PageRank recommendations.
+    </p>
+    <div class="hero-cta-row">
+      <button class="btn-hero-primary" onclick="scrollToPlanner()">
+        <i data-lucide="sparkles"></i>
+        Start Planning
+      </button>
+      <div class="hero-stat-chips">
+        <span class="chip">6M+ Reviews</span>
+        <span class="chip">8 Cities</span>
+        <span class="chip">Graph AI</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-scroll" onclick="scrollToPlanner()">
+    <span>scroll down</span>
+    <i data-lucide="chevrons-down"></i>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════ PLANNER ══ -->
+<section id="planner">
+  <div class="container">
+
+    <!-- Credentials accordion -->
+    <div class="creds-panel" id="creds-panel">
+      <button class="creds-toggle" id="creds-toggle" onclick="toggleCreds()">
+        <span class="creds-toggle-left">
+          <i data-lucide="key-round"></i>
+          <span class="creds-toggle-label">API Credentials</span>
+          <span class="creds-status" id="creds-status"></span>
+        </span>
+        <i data-lucide="chevron-down" class="creds-chevron" id="creds-chevron"></i>
+      </button>
+
+      <div class="creds-body" id="creds-body">
+        <div class="creds-grid">
+          <div class="form-group">
+            <label for="neo4j-uri">Neo4j URI <span class="required">*</span></label>
+            <input type="password" id="neo4j-uri" placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="neo4j-password">Neo4j Password <span class="required">*</span></label>
+            <input type="password" id="neo4j-password" placeholder="your-neo4j-password" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="groq-key">Groq API Key <span class="optional">(for NL parsing)</span></label>
+            <input type="password" id="groq-key" placeholder="gsk_..." autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="ors-key">ORS API Key <span class="optional">(optional routing)</span></label>
+            <input type="password" id="ors-key" placeholder="optional — for real driving routes" autocomplete="off" />
+          </div>
+        </div>
+        <div class="creds-footer">
+          <p class="creds-hint">Credentials are saved to your browser's local storage — never sent anywhere except Neo4j/Groq.</p>
+          <button class="btn-save-creds" id="btn-save-creds" onclick="saveCredentials()">
+            <i data-lucide="save"></i>
+            Save Credentials
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error banner -->
+    <div class="error-banner" id="error-banner" hidden>
+      <i data-lucide="circle-alert"></i>
+      <span id="error-text"></span>
+      <button onclick="hideError()"><i data-lucide="x"></i></button>
+    </div>
+
+    <!-- Planner card -->
+    <div class="planner-card">
+      <div class="planner-header">
+        <h2>Plan Your Trip</h2>
+        <p>Tell us where you want to go and what you love</p>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab active" data-tab="nl" onclick="switchTab('nl')">
+          <i data-lucide="message-square"></i>
+          Natural Language
+        </button>
+        <button class="tab" data-tab="structured" onclick="switchTab('structured')">
+          <i data-lucide="sliders-horizontal"></i>
+          Structured Form
+        </button>
+      </div>
+
+      <!-- NL tab -->
+      <div class="tab-pane active" id="tab-nl">
+        <div class="nl-wrap">
+          <textarea
+            id="nl-prompt"
+            placeholder="e.g. Plan a 3-day trip to Nashville. I love live music, BBQ, and some outdoor walks. Budget-friendly."
+            rows="4"
+          ></textarea>
+          <div class="nl-examples">
+            <span class="examples-label">Try:</span>
+            <button class="example-pill" onclick="fillExample(this)">3 days in Philadelphia, museums &amp; coffee shops, moderate budget</button>
+            <button class="example-pill" onclick="fillExample(this)">Weekend in New Orleans, jazz bars &amp; Creole food</button>
+            <button class="example-pill" onclick="fillExample(this)">5 days Nashville, live music, BBQ, parks</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Structured tab -->
+      <div class="tab-pane" id="tab-structured">
+        <div class="structured-grid">
+          <div class="form-group">
+            <label for="city-select">
+              <i data-lucide="map-pin"></i>
+              Destination
+            </label>
+            <select id="city-select"></select>
+          </div>
+
+          <div class="form-group">
+            <label for="days-slider">
+              <i data-lucide="calendar-days"></i>
+              Trip Length — <span id="days-value">3 days</span>
+            </label>
+            <div class="slider-wrap">
+              <span class="slider-label">1</span>
+              <input type="range" id="days-slider" min="1" max="7" value="3" oninput="updateDaysLabel(this)" />
+              <span class="slider-label">7</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>
+              <i data-lucide="wallet"></i>
+              Budget
+            </label>
+            <div class="budget-row" id="budget-row">
+              <button class="budget-btn active" data-budget="" onclick="selectBudget(this)">Any</button>
+              <button class="budget-btn" data-budget="budget" onclick="selectBudget(this)">$</button>
+              <button class="budget-btn" data-budget="moderate" onclick="selectBudget(this)">$$</button>
+              <button class="budget-btn" data-budget="upscale" onclick="selectBudget(this)">$$$</button>
+              <button class="budget-btn" data-budget="luxury" onclick="selectBudget(this)">$$$$</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group cats-group">
+          <label>
+            <i data-lucide="heart"></i>
+            Interests
+          </label>
+          <div class="categories-grid" id="categories-grid"></div>
+        </div>
+      </div>
+
+      <!-- Plan button -->
+      <div class="plan-btn-wrap">
+        <button class="btn-plan" id="btn-plan" onclick="planTrip()">
+          <i data-lucide="sparkles"></i>
+          Plan My Trip
+        </button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════ LOADING ══ -->
+<div id="loading-overlay" hidden>
+  <div class="loading-card">
+    <div class="loading-spinner"></div>
+    <p id="loading-msg">Building your itinerary…</p>
+    <p class="loading-sub" id="loading-sub">Querying Neo4j graph, running PageRank, clustering stops…</p>
+    <p class="loading-timer" id="loading-timer"></p>
+    <button class="btn-cancel-loading" onclick="cancelLoading()">Cancel</button>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════ RESULTS ══ -->
+<section id="results" hidden>
+  <div class="container">
+
+    <!-- City banner -->
+    <div class="city-banner" id="city-banner">
+      <div class="city-banner-content">
+        <h2 id="results-title">Philadelphia — 3-Day Itinerary</h2>
+        <p id="results-subtitle">Museums, Coffee & Tea, Restaurants</p>
+      </div>
+      <button class="btn-replan" onclick="scrollToPlanner()">
+        <i data-lucide="refresh-cw"></i>
+        Plan Another
+      </button>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <!-- Intent summary (NL only) -->
+    <div class="intent-card" id="intent-card" hidden>
+      <i data-lucide="brain"></i>
+      <div id="intent-text"></div>
+    </div>
+
+    <!-- Main grid: itinerary + map -->
+    <div class="results-grid">
+
+      <div class="itinerary-panel">
+        <div class="panel-header">
+          <h3><i data-lucide="list-ordered"></i> Day-by-Day Itinerary</h3>
+        </div>
+        <div id="days-container"></div>
+        <button class="btn-export" id="btn-export" onclick="exportItinerary()">
+          <i data-lucide="download"></i>
+          Download Itinerary (.txt)
+        </button>
+      </div>
+
+      <div class="map-panel">
+        <div class="panel-header">
+          <h3><i data-lucide="map"></i> Interactive Map</h3>
+        </div>
+        <div id="map"></div>
+      </div>
+
+    </div>
+
+    <!-- Summary stats -->
+    <div class="summary-bar" id="summary-bar"></div>
+
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════ FOOTER ══ -->
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span>🗺️</span>
+      <strong>TripGraph</strong>
+    </div>
+    <p class="footer-copy">
+      IT5612 Big Data Analytics for AI &nbsp;·&nbsp;
+      Dataset: Yelp Open Dataset (6M+ reviews) &nbsp;·&nbsp;
+      Graph: Neo4j AuraDB &nbsp;·&nbsp;
+      LLM: Groq Llama 3
+    </p>
+  </div>
+</footer>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
