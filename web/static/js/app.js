@@ -18,9 +18,7 @@ const state = {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  loadCredentials();
   await loadConfig();
-  initCredsPanel();
   setupNavScroll();
   lucide.createIcons();
 });
@@ -36,14 +34,6 @@ async function loadConfig() {
 
     populateCitySelect();
     populateCategoriesGrid();
-
-    // Pre-fill URI if .env has it
-    if (data.defaults?.neo4j_uri) {
-      const uriEl = document.getElementById('neo4j-uri');
-      if (!uriEl.value) uriEl.value = data.defaults.neo4j_uri;
-    }
-
-    updateCredsStatus();
   } catch (err) {
     console.warn('Could not load config from server:', err);
   }
@@ -59,72 +49,6 @@ function setupNavScroll() {
 
 function scrollToPlanner() {
   document.getElementById('planner').scrollIntoView({ behavior: 'smooth' });
-}
-
-// ── Credentials ───────────────────────────────────────────────────────────────
-function loadCredentials() {
-  const saved = JSON.parse(localStorage.getItem('tripgraph_creds') || '{}');
-  if (saved.neo4jUri)      document.getElementById('neo4j-uri').value      = saved.neo4jUri;
-  if (saved.neo4jPassword) document.getElementById('neo4j-password').value = saved.neo4jPassword;
-  if (saved.groqKey)       document.getElementById('groq-key').value       = saved.groqKey;
-  if (saved.orsKey)        document.getElementById('ors-key').value        = saved.orsKey;
-}
-
-function saveCredentials() {
-  const creds = readCredentials();
-  localStorage.setItem('tripgraph_creds', JSON.stringify(creds));
-
-  const btn = document.getElementById('btn-save-creds');
-  const orig = btn.innerHTML;
-  btn.innerHTML = '<i data-lucide="check"></i> Saved!';
-  btn.classList.add('saved');
-  lucide.createIcons();
-  setTimeout(() => {
-    btn.innerHTML = orig;
-    btn.classList.remove('saved');
-    lucide.createIcons();
-  }, 2200);
-
-  updateCredsStatus();
-}
-
-function readCredentials() {
-  return {
-    neo4jUri:      document.getElementById('neo4j-uri').value.trim(),
-    neo4jPassword: document.getElementById('neo4j-password').value.trim(),
-    groqKey:       document.getElementById('groq-key').value.trim(),
-    orsKey:        document.getElementById('ors-key').value.trim(),
-  };
-}
-
-function updateCredsStatus() {
-  const creds  = readCredentials();
-  const status = document.getElementById('creds-status');
-  if (creds.neo4jUri && creds.neo4jPassword) {
-    status.textContent = '✓ Connected';
-    status.className   = 'creds-status ok';
-  } else {
-    status.textContent = '⚠ Credentials needed';
-    status.className   = 'creds-status missing';
-  }
-}
-
-function toggleCreds() {
-  const panel = document.getElementById('creds-panel');
-  panel.classList.toggle('open');
-}
-
-function initCredsPanel() {
-  const creds = readCredentials();
-  if (!creds.neo4jUri || !creds.neo4jPassword) {
-    document.getElementById('creds-panel').classList.add('open');
-  }
-  updateCredsStatus();
-
-  // Update status on any input change
-  ['neo4j-uri', 'neo4j-password', 'groq-key', 'ors-key'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', updateCredsStatus);
-  });
 }
 
 // ── Form population ───────────────────────────────────────────────────────────
@@ -221,6 +145,7 @@ function showLoading(msg) {
   const timerEl   = document.getElementById('loading-timer');
   const subEl     = document.getElementById('loading-sub');
   timerEl.textContent = '';
+  subEl.textContent   = '';
   clearInterval(_loadingTimer);
   _loadingTimer = setInterval(() => {
     const secs = Math.floor((Date.now() - startTime) / 1000);
@@ -248,25 +173,7 @@ function cancelLoading() {
 async function planTrip() {
   hideError();
 
-  const creds = readCredentials();
-  if (!creds.neo4jUri) {
-    showError('Please enter your Neo4j URI in the credentials panel above.');
-    document.getElementById('creds-panel').classList.add('open');
-    return;
-  }
-  if (!creds.neo4jPassword) {
-    showError('Please enter your Neo4j password in the credentials panel above.');
-    document.getElementById('creds-panel').classList.add('open');
-    return;
-  }
-
-  const payload = {
-    neo4j_uri:      creds.neo4jUri,
-    neo4j_user:     'neo4j',
-    neo4j_password: creds.neo4jPassword,
-    groq_api_key:   creds.groqKey  || null,
-    ors_api_key:    creds.orsKey   || null,
-  };
+  const payload = {};
 
   if (state.activeTab === 'nl') {
     const text = document.getElementById('nl-prompt').value.trim();

@@ -75,46 +75,6 @@
 <section id="planner">
   <div class="container">
 
-    <!-- Credentials accordion -->
-    <div class="creds-panel" id="creds-panel">
-      <button class="creds-toggle" id="creds-toggle" onclick="toggleCreds()">
-        <span class="creds-toggle-left">
-          <i data-lucide="key-round"></i>
-          <span class="creds-toggle-label">API Credentials</span>
-          <span class="creds-status" id="creds-status"></span>
-        </span>
-        <i data-lucide="chevron-down" class="creds-chevron" id="creds-chevron"></i>
-      </button>
-
-      <div class="creds-body" id="creds-body">
-        <div class="creds-grid">
-          <div class="form-group">
-            <label for="neo4j-uri">Neo4j URI <span class="required">*</span></label>
-            <input type="password" id="neo4j-uri" placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io" autocomplete="off" />
-          </div>
-          <div class="form-group">
-            <label for="neo4j-password">Neo4j Password <span class="required">*</span></label>
-            <input type="password" id="neo4j-password" placeholder="your-neo4j-password" autocomplete="off" />
-          </div>
-          <div class="form-group">
-            <label for="groq-key">Groq API Key <span class="optional">(for NL parsing)</span></label>
-            <input type="password" id="groq-key" placeholder="gsk_..." autocomplete="off" />
-          </div>
-          <div class="form-group">
-            <label for="ors-key">ORS API Key <span class="optional">(optional routing)</span></label>
-            <input type="password" id="ors-key" placeholder="optional — for real driving routes" autocomplete="off" />
-          </div>
-        </div>
-        <div class="creds-footer">
-          <p class="creds-hint">Credentials are saved to your browser's local storage — never sent anywhere except Neo4j/Groq.</p>
-          <button class="btn-save-creds" id="btn-save-creds" onclick="saveCredentials()">
-            <i data-lucide="save"></i>
-            Save Credentials
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Error banner -->
     <div class="error-banner" id="error-banner" hidden>
       <i data-lucide="circle-alert"></i>

@@ -31,8 +31,7 @@ load_dotenv(os.path.join(ROOT_DIR, ".env"))
 from config import (
     SUPPORTED_CITIES, TOURISM_CATEGORIES, BUDGET_LABELS,
     NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD,
-    GROQ_API_KEY as _DEFAULT_GROQ,
-    ORS_API_KEY  as _DEFAULT_ORS,
+    GROQ_API_KEY, ORS_API_KEY,
     PLACES_PER_DAY,
 )
 
@@ -48,6 +47,23 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# ── Recommender cache (per credential set, loaded once per server lifetime) ────
+_rec_cache: dict = {}
+_rec_lock = __import__("threading").Lock()
+
+def _get_recommender(uri: str, user: str, password: str):
+    from recommender import TripGraphRecommender
+    key = (uri, user, password)
+    if key not in _rec_cache:
+        with _rec_lock:
+            if key not in _rec_cache:
+                print(f"[cache] Loading recommender for {uri[:30]}…")
+                rec = TripGraphRecommender(uri=uri, user=user, password=password)
+                rec.load_businesses()
+                print(f"[cache] Loaded {len(rec._biz_df):,} businesses — cached.")
+                _rec_cache[key] = rec
+    return _rec_cache[key]
+
 
 @app.get("/", include_in_schema=False)
 async def root():
@@ -56,33 +72,21 @@ async def root():
 
 @app.get("/api/config")
 async def get_config():
-    has_neo4j = bool(NEO4J_URI and "XXXXXXXX" not in NEO4J_URI and NEO4J_PASSWORD)
     return {
         "cities":        SUPPORTED_CITIES,
         "categories":    TOURISM_CATEGORIES,
         "budget_labels": BUDGET_LABELS,
-        "defaults": {
-            "has_neo4j": has_neo4j,
-            "has_groq":  bool(_DEFAULT_GROQ),
-            "has_ors":   bool(_DEFAULT_ORS),
-            "neo4j_uri": NEO4J_URI if has_neo4j else "",
-        },
     }
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
 class PlanRequest(BaseModel):
-    neo4j_uri:      str
-    neo4j_user:     str           = "neo4j"
-    neo4j_password: str
-    groq_api_key:   Optional[str] = None
-    ors_api_key:    Optional[str] = None
-    text:           Optional[str] = None
-    city:           Optional[str] = None
-    days:           int           = 3
-    categories:     List[str]     = []
-    budget:         Optional[str] = None
+    text:       Optional[str] = None
+    city:       Optional[str] = None
+    days:       int           = 3
+    categories: List[str]     = []
+    budget:     Optional[str] = None
 
 
 class ExportRequest(BaseModel):
@@ -97,15 +101,6 @@ class ExportRequest(BaseModel):
 def plan_trip(req: PlanRequest):  # sync def so FastAPI runs it in a threadpool — keeps event loop free
     import prompt_processor as pp
     import itinerary_builder as ib
-    from recommender import TripGraphRecommender
-
-    original_groq = pp.GROQ_API_KEY
-    original_ors  = ib.ORS_API_KEY
-
-    if req.groq_api_key:
-        pp.GROQ_API_KEY = req.groq_api_key
-    if req.ors_api_key:
-        ib.ORS_API_KEY = req.ors_api_key
 
     try:
         city           = req.city
@@ -135,16 +130,10 @@ def plan_trip(req: PlanRequest):  # sync def so FastAPI runs it in a threadpool 
         if not categories:
             categories = ["Restaurants", "Arts & Entertainment"]
 
-        print(f"[plan] Connecting to Neo4j: {req.neo4j_uri[:30]}...")
+        print(f"[plan] Getting recommender for {NEO4J_URI[:30]}...")
         try:
-            rec = TripGraphRecommender(
-                uri=req.neo4j_uri,
-                user=req.neo4j_user,
-                password=req.neo4j_password,
-            )
-            print("[plan] Loading businesses from Neo4j...")
-            rec.load_businesses()
-            print(f"[plan] Loaded {len(rec._biz_df):,} businesses")
+            rec = _get_recommender(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+            print(f"[plan] Recommender ready ({len(rec._biz_df):,} businesses cached)")
         except Exception as exc:
             print(f"[plan] Neo4j error: {exc}")
             raise HTTPException(status_code=503, detail=f"Neo4j connection failed: {exc}")
@@ -222,9 +211,11 @@ def plan_trip(req: PlanRequest):  # sync def so FastAPI runs it in a threadpool 
             "itinerary":      result_days,
         }
 
-    finally:
-        pp.GROQ_API_KEY = original_groq
-        ib.ORS_API_KEY  = original_ors
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"[plan] Unexpected error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/api/export")
